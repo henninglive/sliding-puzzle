@@ -53,6 +53,15 @@ struct SearchNode {
     prev: Option<(Direction, Rc<SearchNode>)>,
 }
 
+#[derive(Debug)]
+pub struct Solver {
+    head: Rc<SearchNode>,
+    seen: HashSet<Rc<SearchNode>>,
+    queue: BinaryHeap<Rc<SearchNode>>,
+    pub limit: usize,
+    pub iters: usize,
+}
+
 impl Direction {
     pub fn rev(&self) -> Direction {
         match *self {
@@ -177,56 +186,6 @@ impl Board {
             zero: new as u8,
         })
     }
-
-    pub fn solve(&self) -> Vec<Direction> {
-        use Direction::*;
-
-        let mut seen = HashSet::<Rc<SearchNode>>::new();
-        let mut queue = BinaryHeap::new();
-        let mut head = Rc::new(SearchNode {
-                board: *self,
-                depth: 0,
-                prev: None,
-        });
-
-        while head.board.manhattan() > 0 {
-            let rev = head.prev.as_ref().map(|p| p.0.rev());
-            for dir in [Up, Down, Left, Right].iter() {
-                if rev == Some(*dir) {
-                    continue;
-                }
-
-                if let Some(next_board) = head.board.play_move(*dir) {
-                    let next = Rc::new(SearchNode {
-                        board: next_board,
-                        depth: head.depth + 1,
-                        prev: Some((*dir, head.clone())),
-                    });
-
-                    let (remove, insert) = if let Some(stored) = seen.get(&*next) {
-                        if stored.depth > next.depth {
-                            (true, true)
-                        } else {
-                            (false, false)
-                        }
-                    } else {
-                        (false, true)
-                    };
-
-                    if remove {
-                        seen.remove(&*next);
-                    }
-
-                    if insert {
-                        seen.insert(next.clone());
-                        queue.push(next);
-                    }
-                }
-            }
-            head = queue.pop().unwrap();
-        }
-        node_to_moves(head)
-    }
 }
 
 fn node_to_moves(mut head: Rc<SearchNode>) -> Vec<Direction> {
@@ -241,6 +200,80 @@ fn node_to_moves(mut head: Rc<SearchNode>) -> Vec<Direction> {
     }
     v.reverse();
     v
+}
+
+impl Solver {
+    pub fn new(start: Board, limit: usize) -> Solver {
+        Solver {
+            head: Rc::new(SearchNode {
+                board: start,
+                depth: 0,
+                prev: None,
+            }),
+            seen: HashSet::new(),
+            queue: BinaryHeap::new(),
+            limit: limit,
+            iters: 0,
+        }
+    }
+
+    pub fn solve(&mut self) -> Option<Vec<Direction>> {
+        for _ in 0..self.limit {
+            if self.head.board.manhattan() == 0 {
+                let mut head = self.queue.pop()?;
+                std::mem::swap(&mut head, &mut self.head);
+                return Some(node_to_moves(head));
+            } else {
+                self.head = self.next()?;
+            }
+        }
+        None
+    }
+
+    pub fn len(&self) -> usize {
+        self.queue.len()
+    }
+
+    fn next(&mut self) -> Option<Rc<SearchNode>> {
+        use Direction::*;
+
+        let rev = self.head.prev.as_ref().map(|p| p.0.rev());
+        for dir in [Up, Down, Left, Right].iter() {
+            if rev == Some(*dir) {
+                continue;
+            }
+
+            if let Some(next_board) = self.head.board.play_move(*dir) {
+                self.iters += 1;
+
+                let next = Rc::new(SearchNode {
+                    board: next_board,
+                    depth: self.head.depth + 1,
+                    prev: Some((*dir, self.head.clone())),
+                });
+
+                let (remove, insert) = if let Some(stored) = self.seen.get(&*next) {
+                    if stored.depth > next.depth {
+                        (true, true)
+                    } else {
+                        (false, false)
+                    }
+                } else {
+                    (false, true)
+                };
+
+                if remove {
+                    self.seen.remove(&*next);
+                }
+
+                if insert {
+                    self.seen.insert(next.clone());
+                    self.queue.push(next);
+                }
+            }
+        }
+        self.queue.pop()
+    }
 }
 
 impl FromStr for Board {
@@ -264,7 +297,7 @@ mod tests {
 
     static TARGET: Board = Board {
         grid: [1, 2, 3, 4, 5, 6, 7, 8, 0],
-        zero: 8
+        zero: 8,
     };
 
     static TEST_SOLUTIONS: [(&'static str, &'static[&'static str]); 15] = [
@@ -343,9 +376,10 @@ mod tests {
     fn test_solutions() {
         for &(board, optimals) in TEST_SOLUTIONS.iter() {
             let puzzle = board.parse::<Board>().unwrap();
+            let mut solver = Solver::new(puzzle, LIMIT);
 
             let mut answer = puzzle;
-            for dir in puzzle.solve() {
+            for dir in solver.solve().expect("no solution") {
                 answer = answer.play_move(dir).expect("invalid move");
             }
 
