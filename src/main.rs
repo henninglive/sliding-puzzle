@@ -1,5 +1,6 @@
 extern crate sliding_puzzle as sp;
 
+/*
 use sp::*;
 
 const LIMIT: usize = 1_000_000;
@@ -24,8 +25,10 @@ static TEST_SOLUTIONS: [(&'static str, &'static[&'static str]); 15] = [
     ("876543210", &["ULLURDDRUULDDLUURDDRUULDDLURRD",
         "ULULDDRUULDDRUURDDLUURDLULDRDR"]),
 ];
+*/
 
 fn main() {
+    /*
     for &(board, solutions) in TEST_SOLUTIONS.iter() {
         let puzzle = board.parse::<Board>().unwrap();
         let mut solver = Solver::new(puzzle, LIMIT);
@@ -36,7 +39,7 @@ fn main() {
             .map(|_| {
                 print!("{:?} ", solver.len());
                 solver.solve()
-                    .expect("no solution")
+                    .expect(&format!("no solution {}", solver.iters))
                     .iter()
                     .map(|m| char::from(*m))
                     .collect::<String>()
@@ -46,4 +49,5 @@ fn main() {
 
         assert!(d.is_some());
     }
+    */
 }

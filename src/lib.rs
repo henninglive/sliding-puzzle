@@ -4,12 +4,13 @@
 
 #[macro_use]
 extern crate quick_error;
+extern crate indexmap;
 
-use std::collections::{BinaryHeap, HashSet};
+use indexmap::{IndexSet, Equivalent};
+use std::collections::BinaryHeap;
 use std::hash::{Hash, Hasher};
 use std::cmp::Ordering;
 use std::str::FromStr;
-use std::rc::Rc;
 
 const SIZE: usize = 9;
 const STRIDE: usize = 3;
@@ -46,18 +47,18 @@ pub struct Board {
     zero: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SearchNode {
     board: Board,
-    depth: u8,
-    prev: Option<(Direction, Rc<SearchNode>)>,
+    prev: Option<(Direction, usize)>,
 }
 
 #[derive(Debug)]
 pub struct Solver {
-    head: Rc<SearchNode>,
-    seen: HashSet<Rc<SearchNode>>,
-    queue: BinaryHeap<Rc<SearchNode>>,
+    head: Option<(SearchNode, usize)>,
+    seen: IndexSet<SearchNode>,
+    queue: BinaryHeap<SearchNode>,
+    best: Option<usize>,
     pub limit: usize,
     pub iters: usize,
 }
@@ -116,10 +117,13 @@ impl PartialOrd for SearchNode {
 
 impl Ord for SearchNode {
     fn cmp(&self, other: &SearchNode) -> Ordering {
-        (match self.board.manhattan().cmp(&other.board.manhattan()) {
-            o @ Ordering::Less | o @ Ordering::Greater => o,
-            Ordering::Equal => self.depth.cmp(&other.depth),
-        }).reverse()
+        self.board.manhattan().cmp(&other.board.manhattan()).reverse()
+    }
+}
+
+impl Equivalent<SearchNode> for Board {
+    fn equivalent(&self, key: &SearchNode) -> bool {
+        self.eq(&key.board)
     }
 }
 
@@ -188,91 +192,102 @@ impl Board {
     }
 }
 
-fn node_to_moves(mut head: Rc<SearchNode>) -> Vec<Direction> {
-    let mut v = Vec::new();
-    while head.prev.is_some() {
-        let p = head.prev
-            .as_ref()
-            .map(|p| (p.0, p.1.clone()))
-            .unwrap();
-        v.push(p.0);
-        head = p.1;
-    }
-    v.reverse();
-    v
-}
-
 impl Solver {
     pub fn new(start: Board, limit: usize) -> Solver {
+        let head = SearchNode {
+            board: start,
+            prev: None,
+        };
+
+        let mut seen = IndexSet::new();
+        seen.insert(head.clone());
+
         Solver {
-            head: Rc::new(SearchNode {
-                board: start,
-                depth: 0,
-                prev: None,
-            }),
-            seen: HashSet::new(),
+            head: Some((head, 0)),
+            seen: seen,
             queue: BinaryHeap::new(),
+            best: None,
             limit: limit,
             iters: 0,
         }
     }
 
-    pub fn solve(&mut self) -> Option<Vec<Direction>> {
-        for _ in 0..self.limit {
-            if self.head.board.manhattan() == 0 {
-                let mut head = self.queue.pop()?;
-                std::mem::swap(&mut head, &mut self.head);
-                return Some(node_to_moves(head));
-            } else {
-                self.head = self.next()?;
-            }
+    fn depth(&self, mut idx: usize) -> usize {
+        let mut depth = 0;
+        loop {
+            idx = match self.seen.get_index(idx).unwrap().prev {
+                Some((_, ref prev_idx)) => *prev_idx,
+                None => break,
+            };
+            depth += 1;
         }
-        None
+        depth
     }
 
-    pub fn len(&self) -> usize {
-        self.queue.len()
-    }
-
-    fn next(&mut self) -> Option<Rc<SearchNode>> {
+    pub fn solve(&mut self) -> bool {
         use Direction::*;
 
-        let rev = self.head.prev.as_ref().map(|p| p.0.rev());
-        for dir in [Up, Down, Left, Right].iter() {
-            if rev == Some(*dir) {
-                continue;
-            }
+        while let Some((ref head, ref head_idx)) = self.head {
+            let head_depth = match head.prev {
+                Some((_, ref prev_idx)) => self.depth(*prev_idx) + 1,
+                None => 0,
+            };
 
-            if let Some(next_board) = self.head.board.play_move(*dir) {
-                self.iters += 1;
-
-                let next = Rc::new(SearchNode {
-                    board: next_board,
-                    depth: self.head.depth + 1,
-                    prev: Some((*dir, self.head.clone())),
-                });
-
-                let (remove, insert) = if let Some(stored) = self.seen.get(&*next) {
-                    if stored.depth > next.depth {
-                        (true, true)
-                    } else {
-                        (false, false)
-                    }
-                } else {
-                    (false, true)
-                };
-
-                if remove {
-                    self.seen.remove(&*next);
+            let rev = head.prev.as_ref().map(|p| p.0.rev());
+            for dir in [Up, Down, Left, Right].iter() {
+                if rev == Some(*dir) {
+                    continue;
                 }
 
-                if insert {
-                    self.seen.insert(next.clone());
-                    self.queue.push(next);
+                if let Some(next_board) = head.board.play_move(*dir) {
+                    self.seen.get(&next_board)
+                        .and_then(|s| s.prev)
+                        .map(|(_, idx)| self.depth(idx));
                 }
             }
         }
-        self.queue.pop()
+
+        /*
+        for _ in 0..self.limit {
+            let rev = self.head.prev.as_ref().map(|p| p.0.rev());
+            for dir in [Up, Down, Left, Right].iter() {
+                if rev == Some(*dir) {
+                    continue;
+                }
+
+                if let Some(next_board) = self.head.board.play_move(*dir) {
+                    self.iters += 1;
+
+                    let next = Rc::new(SearchNode {
+                        board: next_board,
+                        depth: self.head.depth + 1,
+                        prev: Some((*dir, self.head.clone())),
+                    });
+
+                    let (remove, insert) = if let Some(stored) = self.seen.get(&*next) {
+                        if stored.depth > next.depth {
+                            (true, true)
+                        } else {
+                            (false, false)
+                        }
+                    } else {
+                        (false, true)
+                    };
+
+                    if remove {
+                        self.seen.remove(&*next);
+                    }
+
+                    if insert {
+                        self.seen.insert(next.clone());
+                        self.queue.push(next);
+                    }
+                }
+            }
+            self.queue.pop()
+        }
+        */
+        true
     }
 }
 
