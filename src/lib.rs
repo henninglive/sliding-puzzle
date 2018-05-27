@@ -8,9 +8,12 @@ extern crate pathfinding;
 
 use pathfinding::astar::astar;
 use std::str::FromStr;
+use std::fmt::Write;
+use std::fmt;
+use std::char;
 
-const SIZE: usize = 9;
-const STRIDE: usize = 3;
+pub const SIZE: usize = 9;
+pub const STRIDE: usize = 3;
 
 quick_error! {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -150,7 +153,7 @@ impl Board {
         use Direction::*;
 
         let path = astar(
-            // root,
+            // Root,
             &Node {
                 board: self.clone(),
                 prev: None,
@@ -192,6 +195,19 @@ impl FromStr for Board {
             v.push(n as u8);
         }
         Board::new(&v[..])
+    }
+}
+
+impl fmt::Display for Board {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for (j, i) in self.grid.iter().enumerate() {
+            let c = char::from_digit(*i as u32, 10).unwrap();
+            f.write_char(c)?;
+            if j % STRIDE == STRIDE - 1 {
+                f.write_char('\n')?;
+            }
+        }
+        Ok(())
     }
 }
 
