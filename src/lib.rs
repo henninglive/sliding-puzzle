@@ -4,12 +4,9 @@
 
 #[macro_use]
 extern crate quick_error;
-extern crate indexmap;
+extern crate pathfinding;
 
-use indexmap::{IndexSet, Equivalent};
-use std::collections::BinaryHeap;
-use std::hash::{Hash, Hasher};
-use std::cmp::Ordering;
+use pathfinding::astar::astar;
 use std::str::FromStr;
 
 const SIZE: usize = 9;
@@ -47,20 +44,10 @@ pub struct Board {
     zero: u8,
 }
 
-#[derive(Debug, Clone)]
-struct SearchNode {
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+struct Node {
     board: Board,
-    prev: Option<(Direction, usize)>,
-}
-
-#[derive(Debug)]
-pub struct Solver {
-    head: Option<(SearchNode, usize)>,
-    seen: IndexSet<SearchNode>,
-    queue: BinaryHeap<SearchNode>,
-    best: Option<usize>,
-    pub limit: usize,
-    pub iters: usize,
+    prev: Option<Direction>,
 }
 
 impl Direction {
@@ -92,38 +79,6 @@ impl From<Direction> for char {
             Direction::Left  => 'L',
             Direction::Right => 'R',
         }
-    }
-}
-
-impl PartialEq for SearchNode {
-    fn eq(&self, other: &SearchNode) -> bool {
-        self.board.eq(&other.board)
-    }
-}
-
-impl Eq for SearchNode {}
-
-impl Hash for SearchNode {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.board.hash(state);
-    }
-}
-
-impl PartialOrd for SearchNode {
-    fn partial_cmp(&self, other: &SearchNode) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for SearchNode {
-    fn cmp(&self, other: &SearchNode) -> Ordering {
-        self.board.manhattan().cmp(&other.board.manhattan()).reverse()
-    }
-}
-
-impl Equivalent<SearchNode> for Board {
-    fn equivalent(&self, key: &SearchNode) -> bool {
-        self.eq(&key.board)
     }
 }
 
@@ -190,104 +145,41 @@ impl Board {
             zero: new as u8,
         })
     }
-}
 
-impl Solver {
-    pub fn new(start: Board, limit: usize) -> Solver {
-        let head = SearchNode {
-            board: start,
-            prev: None,
-        };
-
-        let mut seen = IndexSet::new();
-        seen.insert(head.clone());
-
-        Solver {
-            head: Some((head, 0)),
-            seen: seen,
-            queue: BinaryHeap::new(),
-            best: None,
-            limit: limit,
-            iters: 0,
-        }
-    }
-
-    fn depth(&self, mut idx: usize) -> usize {
-        let mut depth = 0;
-        loop {
-            idx = match self.seen.get_index(idx).unwrap().prev {
-                Some((_, ref prev_idx)) => *prev_idx,
-                None => break,
-            };
-            depth += 1;
-        }
-        depth
-    }
-
-    pub fn solve(&mut self) -> bool {
+    pub fn solve(&self) -> Vec<Direction> {
         use Direction::*;
 
-        while let Some((ref head, ref head_idx)) = self.head {
-            let head_depth = match head.prev {
-                Some((_, ref prev_idx)) => self.depth(*prev_idx) + 1,
-                None => 0,
-            };
+        let path = astar(
+            // root,
+            &Node {
+                board: self.clone(),
+                prev: None,
+            },
+            // Neighbors fn.
+            |n| {
+                let node = n.clone();
+                [Up, Down, Left, Right]
+                    .into_iter()
+                    .filter_map(move |d| {
+                        node.board
+                        .play_move(*d)
+                        .map(|b| (Node {
+                            board: b,
+                            prev: Some(*d),
+                        }, 1))
+                    })
+            },
+            // Heuristic fn.
+            |n| n.board.manhattan(),
+            // Success fn.
+            |n| n.board.manhattan() == 0,
+        );
 
-            let rev = head.prev.as_ref().map(|p| p.0.rev());
-            for dir in [Up, Down, Left, Right].iter() {
-                if rev == Some(*dir) {
-                    continue;
-                }
-
-                if let Some(next_board) = head.board.play_move(*dir) {
-                    self.seen.get(&next_board)
-                        .and_then(|s| s.prev)
-                        .map(|(_, idx)| self.depth(idx));
-                }
-            }
-        }
-
-        /*
-        for _ in 0..self.limit {
-            let rev = self.head.prev.as_ref().map(|p| p.0.rev());
-            for dir in [Up, Down, Left, Right].iter() {
-                if rev == Some(*dir) {
-                    continue;
-                }
-
-                if let Some(next_board) = self.head.board.play_move(*dir) {
-                    self.iters += 1;
-
-                    let next = Rc::new(SearchNode {
-                        board: next_board,
-                        depth: self.head.depth + 1,
-                        prev: Some((*dir, self.head.clone())),
-                    });
-
-                    let (remove, insert) = if let Some(stored) = self.seen.get(&*next) {
-                        if stored.depth > next.depth {
-                            (true, true)
-                        } else {
-                            (false, false)
-                        }
-                    } else {
-                        (false, true)
-                    };
-
-                    if remove {
-                        self.seen.remove(&*next);
-                    }
-
-                    if insert {
-                        self.seen.insert(next.clone());
-                        self.queue.push(next);
-                    }
-                }
-            }
-            self.queue.pop()
-        }
-        */
-        true
+        path
+        .unwrap().0
+        .into_iter()
+        .filter_map(|n| n.prev)
+        .collect()
     }
 }
 
@@ -307,8 +199,6 @@ impl FromStr for Board {
 mod tests {
     use ::*;
     use Direction::*;
-
-    const LIMIT: usize = 100_000;
 
     static TARGET: Board = Board {
         grid: [1, 2, 3, 4, 5, 6, 7, 8, 0],
@@ -391,10 +281,9 @@ mod tests {
     fn test_solutions() {
         for &(board, optimals) in TEST_SOLUTIONS.iter() {
             let puzzle = board.parse::<Board>().unwrap();
-            let mut solver = Solver::new(puzzle, LIMIT);
 
             let mut answer = puzzle;
-            for dir in solver.solve().expect("no solution") {
+            for dir in puzzle.solve() {
                 answer = answer.play_move(dir).expect("invalid move");
             }
 
