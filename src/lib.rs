@@ -19,16 +19,19 @@ quick_error! {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub enum Error {
         InvalidLength {
-            description("Invalid board size")
+            description("Invalid board size.")
         }
         DuplicateCells {
-            description("Contains duplicate cells numbers")
+            description("Contains duplicate cells numbers.")
         }
         UncontinuousCells {
-            description("Cells numbers are not continuous")
+            description("Cells numbers are not continuous.")
+        }
+        Unsolvable {
+            description("Board is unsolvable.")
         }
         Parse {
-            description("Failed to parse board from str")
+            description("Failed to parse board from str.")
         }
     }
 }
@@ -106,6 +109,21 @@ impl Board {
             }
         }
 
+        // Test solveble
+        let mut inv_count = 0;
+        for i in 0..(SIZE - 1) {
+            for j in (i + 1)..SIZE {
+                if (board[j] > 0) && (board[i] > 0) && (board[i] > board[j]) {
+                    inv_count += 1;
+                }
+            }
+        }
+
+        if inv_count % 2 != 0 {
+            return Err(Error::Unsolvable);
+        }
+
+        // find zero cell
         let zero = board.iter().position(|&i| i == 0).unwrap() as u8;
         let mut grid = [0; 9];
         grid.copy_from_slice(board);
@@ -243,23 +261,27 @@ mod tests {
 
     static TEST_MOVES: [(&'static str, Direction, Option<&'static str>); 12] = [
         ("012345678", Up, None),
-        ("312045678", Up, Some("012345678")),
-        ("812345670", Up, Some("812340675")),
+        ("123045678", Up, Some("023145678")),
+        ("123456078", Up, Some("123056478")),
         ("012345678", Down, Some("312045678")),
-        ("312045678", Down, Some("312645078")),
-        ("812345670", Down, None),
+        ("123045678", Down, Some("123645078")),
+        ("123456078", Down, None),
         ("012345678", Left, None),
         ("102345678", Left, Some("012345678")),
-        ("210345678", Left, Some("201345678")),
+        ("120345678", Left, Some("102345678")),
         ("012345678", Right, Some("102345678")),
         ("102345678", Right, Some("120345678")),
-        ("210345678", Right, None),
+        ("120345678", Right, None),
     ];
 
     static TEST_MANHATTAN: [(&'static str, usize); 3] = [
         ("123456780", 0),
         ("213540678", 9),
         ("647850321", 21),
+    ];
+
+    static TEST_UNSOLVABLE: [&'static str; 1] = [
+        "812043765",
     ];
 
     #[test]
@@ -317,6 +339,13 @@ mod tests {
 
                 assert_eq!(TARGET, answer);
             }
+        }
+    }
+
+    #[test]
+    fn test_unsolvable() {
+        for board in TEST_UNSOLVABLE.iter() {
+            assert_eq!(board.parse::<Board>(), Err(Error::Unsolvable));
         }
     }
 }
