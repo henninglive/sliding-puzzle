@@ -1,4 +1,7 @@
-
 /target
-**/*.rs.bk
 Cargo.lock
+**/*.rs.bk
+
+# JetBrains
+*.iml
+.idea
