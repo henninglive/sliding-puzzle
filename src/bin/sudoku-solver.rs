@@ -1,4 +1,4 @@
-extern crate sliding_puzzle as ss;
+use sliding_puzzle::*;
 
 fn main() {
     let data = std::env::args()
@@ -7,10 +7,10 @@ fn main() {
         .filter_map(|c| c.to_digit(10).map(|i| i as u8))
         .collect::<Vec<_>>();
 
-    let cells = data.get(..ss::SIZE)
+    let cells = data.get(..SIZE)
         .expect("Incomplete board");
 
-    let mut board = ss::Board::new(cells)
+    let mut board = Board::new(cells)
         .expect("Invalid board");
 
     print!("Start board:\n{}\n", board);

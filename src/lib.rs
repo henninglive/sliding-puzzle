@@ -2,10 +2,7 @@
 //!
 //! <https://www.cs.cmu.edu/~adamchik/15-121/labs/HW-7%20Slide%20Puzzle/lab.html>
 
-#[macro_use]
-extern crate quick_error;
-extern crate pathfinding;
-
+use quick_error::quick_error;
 use pathfinding::astar::astar;
 use std::str::FromStr;
 use std::fmt::Write;
@@ -41,7 +38,7 @@ pub enum Direction {
     Up,
     Down,
     Left,
-    Right
+    Right,
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
@@ -59,9 +56,9 @@ struct Node {
 impl Direction {
     pub fn rev(&self) -> Direction {
         match *self {
-            Direction::Up    => Direction::Down,
-            Direction::Down  => Direction::Up,
-            Direction::Left  => Direction::Right,
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
             Direction::Right => Direction::Left,
         }
     }
@@ -80,9 +77,9 @@ impl Direction {
 impl From<Direction> for char {
     fn from(dir: Direction) -> char {
         match dir {
-            Direction::Up    => 'U',
-            Direction::Down  => 'D',
-            Direction::Left  => 'L',
+            Direction::Up => 'U',
+            Direction::Down => 'D',
+            Direction::Left => 'L',
             Direction::Right => 'R',
         }
     }
@@ -97,7 +94,7 @@ impl Board {
         let mut bitset = [0u8; <u8>::max_value() as usize / 8];
         for n in board {
             if bitset[(*n / 8) as usize] & (1 << (*n % 8)) != 0 {
-                return Err(Error::DuplicateCells)
+                return Err(Error::DuplicateCells);
             }
 
             bitset[(*n / 8) as usize] |= 1 << (*n % 8);
@@ -105,7 +102,7 @@ impl Board {
 
         for i in 0..SIZE {
             if bitset[(i / 8) as usize] & (1 << (i % 8)) == 0 {
-                return Err(Error::UncontinuousCells)
+                return Err(Error::UncontinuousCells);
             }
         }
 
@@ -152,10 +149,10 @@ impl Board {
 
         let old = self.zero as usize;
         let new = match dir {
-            Up    if old >= STRIDE               => old - STRIDE,
-            Down  if old +  STRIDE <  SIZE       => old + STRIDE,
-            Left  if old %  STRIDE != 0          => old - 1,
-            Right if old %  STRIDE != STRIDE - 1 => old + 1,
+            Up    if old >= STRIDE => old - STRIDE,
+            Down  if old + STRIDE < SIZE => old + STRIDE,
+            Left  if old % STRIDE != 0 => old - 1,
+            Right if old % STRIDE != STRIDE - 1 => old + 1,
             _ => return None,
         };
 
@@ -180,14 +177,14 @@ impl Board {
             |n| {
                 let node = n.clone();
                 [Up, Down, Left, Right]
-                    .into_iter()
+                    .iter()
                     .filter_map(move |d| {
                         node.board
-                        .play_move(*d)
-                        .map(|b| (Node {
-                            board: b,
-                            prev: Some(*d),
-                        }, 1))
+                            .play_move(*d)
+                            .map(|b| (Node {
+                                board: b,
+                                prev: Some(*d),
+                            }, 1))
                     })
             },
             // Heuristic fn.
@@ -197,10 +194,10 @@ impl Board {
         );
 
         path
-        .unwrap().0
-        .into_iter()
-        .filter_map(|n| n.prev)
-        .collect()
+            .unwrap().0
+            .into_iter()
+            .filter_map(|n| n.prev)
+            .collect()
     }
 }
 
@@ -231,7 +228,7 @@ impl fmt::Display for Board {
 
 #[cfg(test)]
 mod tests {
-    use ::*;
+    use super::*;
     use Direction::*;
 
     static TARGET: Board = Board {
@@ -239,7 +236,7 @@ mod tests {
         zero: 8,
     };
 
-    static TEST_SOLUTIONS: [(&'static str, &'static[&'static str]); 15] = [
+    static TEST_SOLUTIONS: [(&'static str, &'static [&'static str]); 15] = [
         ("123405786", &["RD"]),
         ("123745086", &["URRD"]),
         ("123480765", &["DLURD"]),
@@ -291,7 +288,7 @@ mod tests {
 
         assert_eq!(Board::new(&[0; SIZE]), Err(Error::DuplicateCells));
         assert_eq!(Board::new(&[0, 2, 4, 6, 8, 10, 12, 14, 16]),
-            Err(Error::UncontinuousCells));
+                   Err(Error::UncontinuousCells));
 
         Board::new(&[0, 1, 2, 3, 4, 5, 6, 7, 8]).unwrap();
         Board::new(&[7, 1, 4, 3, 2, 6, 5, 0, 8]).unwrap();
