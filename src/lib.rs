@@ -3,7 +3,7 @@
 //! <https://www.cs.cmu.edu/~adamchik/15-121/labs/HW-7%20Slide%20Puzzle/lab.html>
 
 use quick_error::quick_error;
-use pathfinding::astar::astar;
+use pathfinding::directed::astar::astar;
 use std::str::FromStr;
 use std::fmt::Write;
 use std::fmt;
@@ -91,7 +91,7 @@ impl Board {
             return Err(Error::InvalidLength);
         }
 
-        let mut bitset = [0u8; <u8>::max_value() as usize / 8];
+        let mut bitset = [0u8; <u8>::MAX as usize / 8];
         for n in board {
             if bitset[(*n / 8) as usize] & (1 << (*n % 8)) != 0 {
                 return Err(Error::DuplicateCells);
