@@ -16,19 +16,19 @@ quick_error! {
     #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
     pub enum Error {
         InvalidLength {
-            description("Invalid board size.")
+            display("Invalid board size.")
         }
         DuplicateCells {
-            description("Contains duplicate cells numbers.")
+            display("Contains duplicate cells numbers.")
         }
         UncontinuousCells {
-            description("Cells numbers are not continuous.")
+            display("Cells numbers are not continuous.")
         }
         Unsolvable {
-            description("Board is unsolvable.")
+            display("Board is unsolvable.")
         }
         Parse {
-            description("Failed to parse board from str.")
+            display("Failed to parse board from str.")
         }
     }
 }
